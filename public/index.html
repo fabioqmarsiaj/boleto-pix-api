@@ -1,0 +1,260 @@
+
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Boleto → Pix (MVP dinâmico)</title>
+  <style>
+    /* ---------- Reset/Normas ---------- */
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #fafafa;
+      color: #111827;
+      line-height: 1.35;
+      padding: 2rem;
+    }
+
+    /* ---------- Card ---------- */
+    .card {
+      max-width: 920px;
+      margin: auto;
+      padding: 1.5rem;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      box-shadow: 0 1px 0 rgba(0,0,0,.02);
+    }
+
+    h1 { margin: 0 0 .75rem; font-size: 1.9rem; }
+    h2 { margin: 1.5rem 0 .75rem; font-size: 1.25rem; }
+    .notice { margin: 0 0 1rem; font-size: .95rem; color: #4b5563; }
+
+    /* ---------- Form controls ---------- */
+    label { display: block; margin:.5rem 0 .35rem; font-weight: 600; }
+    input, button {
+      font: inherit;
+      width: 100%;
+      padding: .65rem .75rem;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      background: #fff;
+      color: #111827;
+      outline: none;
+    }
+    input:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99,102,241,.15);
+    }
+    input::placeholder { color: #9ca3af; }
+
+    /* Autofill (Chrome/Safari) */
+    input:-webkit-autofill {
+      -webkit-box-shadow: 0 0 0px 1000px #fff inset;
+      -webkit-text-fill-color: #111827;
+      transition: background-color 9999s ease-in-out 0s;
+    }
+
+    /* Remover setas de number */
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+
+    /* ---------- Grid layout estável ---------- */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+    }
+    .col-12 { grid-column: span 12; }
+    .col-6  { grid-column: span 6;  min-width: 260px; }
+    .col-4  { grid-column: span 4;  min-width: 240px; }
+    .col-3  { grid-column: span 3;  min-width: 200px; }
+
+    /* Quebra em telas menores */
+    @media (max-width: 860px) {
+      .col-6, .col-4, .col-3 { grid-column: span 12; }
+    }
+
+    /* ---------- Botão ---------- */
+    .btn {
+      width: auto;
+      background: #0b1226;
+      color: #fff;
+      border: none;
+      padding: .70rem 1rem;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .btn:hover { background:#0f1733; }
+    .actions { margin: .75rem 0 1rem; }
+
+    /* ---------- Resultado ---------- */
+    pre {
+      background:#0b1020;
+      color:#e5e7eb;
+      padding:1rem;
+      border-radius:10px;
+      overflow:auto;
+      font-size: .92rem;
+    }
+    .qr { text-align:center; margin-top:1rem; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Boleto → Pix (MVP dinâmico)</h1>
+    <p class="notice">
+      Gere um QR Pix estático informando <strong>linha digitável (47)</strong> <em>ou</em> <strong>código de barras (44)</strong>,
+      e os dados do <strong>recebedor</strong> (chave Pix, nome, cidade). O front consome a API do mesmo domínio.
+    </p>
+
+    <!-- Dados do boleto -->
+    <h2>Dados do boleto</h2>
+    <section class="grid">
+      <div class="col-6">
+        <label for="ld">Linha Digitável (47 dígitos)</label>
+        <input id="ld" inputmode="numeric" autocomplete="off" placeholder="Ex.: 34191..." />
+      </div>
+      <div class="col-6">
+        <label for="cb">Código de Barras (44 dígitos)</label>
+        <input id="cb" inputmode="numeric" autocomplete="off" placeholder="Ex.: 3419..." />
+      </div>
+      <div class="col-3">
+        <label for="amount">Editar Valor (opcional)</label>
+        <input id="amount" type="number" step="0.01" min="0.01" placeholder="Ex.: 123.45" />
+      </div>
+    </section>
+
+    <!-- Recebedor -->
+    <h2>Recebedor</h2>
+    <section class="grid">
+      <div class="col-6">
+        <label for="pixKey">Chave Pix</label>
+        <input id="pixKey" autocomplete="off" placeholder="email/telefone/EVP/CPF/CNPJ" />
+      </div>
+      <div class="col-3">
+        <label for="merchantName">Nome do Recebedor</label>
+        <input id="merchantName" autocomplete="off" placeholder="Ex.: FABIO MARSIAJ" maxlength="25" />
+      </div>
+      <div class="col-3">
+        <label for="merchantCity">Cidade do Recebedor</label>
+        <input id="merchantCity" autocomplete="off" placeholder="Ex.: BELEM" maxlength="15" />
+      </div>
+    </section>
+
+    <!-- Extras -->
+    <h2>Extras</h2>
+    <section class="grid">
+      <div class="col-6">
+        <label for="payerName">Nome do Pagador (opcional)</label>
+        <input id="payerName" autocomplete="off" placeholder="Ex.: JOAO DA SILVA" maxlength="50" />
+      </div>
+      <div class="col-6">
+        <label for="msg">Mensagem (opcional)</label>
+        <input id="msg" autocomplete="off" placeholder="Pagamento de boleto" />
+      </div>
+    </section>
+
+    <div class="actions">
+      <button id="btn" class="btn" type="button">Converter</button>
+    </div>
+
+    <h2>Resultado</h2>
+    <div id="qr" class="qr"></div>
+    <pre id="out" aria-live="polite">{"aguardando": true}</pre>
+  </main>
+
+  <script>
+    /* Utilidades */
+    const onlyDigits = (v) => (v || '').replace(/\D+/g, '');
+    const sanitizeCity = (v) =>
+      (v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+
+    // Evitar ambiguidade: se preencher LD, desabilita CB; se preencher CB, desabilita LD
+    const ld = document.getElementById('ld');
+    const cb = document.getElementById('cb');
+
+    const syncMutualExclusion = () => {
+      const hasLD = onlyDigits(ld.value).length > 0;
+      const hasCB = onlyDigits(cb.value).length > 0;
+      ld.disabled = hasCB;
+      cb.disabled = hasLD;
+    };
+
+    // Filtros de entrada (somente dígitos) + mutual exclusion
+    const onDigitInput = (el, max) => (e) => {
+      const pos = el.selectionStart;
+      const before = el.value;
+      el.value = onlyDigits(el.value).slice(0, max);
+      // reposiciona caret de forma simples
+      const diff = before.length - el.value.length;
+      el.selectionEnd = Math.max(0, pos - diff);
+      syncMutualExclusion();
+    };
+    ld.addEventListener('input', onDigitInput(ld, 47));
+    cb.addEventListener('input', onDigitInput(cb, 44));
+
+    // Normalização de cidade
+    const cityEl = document.getElementById('merchantCity');
+    cityEl.addEventListener('input', () => {
+      cityEl.value = sanitizeCity(cityEl.value).slice(0, 15);
+    });
+
+    async function convert() {
+      const linhaDigitavel = onlyDigits(ld.value);
+      const codigoBarras  = onlyDigits(cb.value);
+      const amount        = document.getElementById('amount').value;
+      const pixKey        = document.getElementById('pixKey').value.trim();
+      const merchantName  = document.getElementById('merchantName').value.trim().slice(0,25);
+      const merchantCity  = sanitizeCity(document.getElementById('merchantCity').value.trim()).slice(0,15);
+      const payerName     = document.getElementById('payerName').value.trim().slice(0,50);
+      const message       = document.getElementById('msg').value.trim();
+
+      if (!pixKey || !merchantName || !merchantCity) {
+        alert('Informe chave Pix, nome do recebedor e cidade.');
+        return;
+      }
+      if (!linhaDigitavel && !codigoBarras) {
+        alert('Informe a linha digitável (47) ou o código de barras (44).');
+        return;
+      }
+
+      const payload = { pixKey, merchantName, merchantCity };
+      if (linhaDigitavel) payload.linhaDigitavel = linhaDigitavel;
+      if (codigoBarras)  payload.codigoBarras  = codigoBarras;
+      if (amount)        payload.amountOverride = Number(amount);
+      if (message)       payload.message = message;
+      if (payerName)     payload.payerName = payerName;
+
+      try {
+        const res = await fetch('http://localhost:3000/pix/convert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        document.getElementById('out').textContent = JSON.stringify(data, null, 2);
+
+        const qrDiv = document.getElementById('qr');
+        qrDiv.innerHTML = '';
+        if (data && data.imageBase64) {
+          const img = document.createElement('img');
+          img.src = data.imageBase64;
+          img.alt = 'QR Pix';
+          img.style.maxWidth = '260px';
+          img.style.imageRendering = 'crisp-edges';
+          qrDiv.appendChild(img);
+        }
+      } catch (e) {
+        document.getElementById('out').textContent = 'Erro: ' + e.message;
+      }
+    }
+
+    document.getElementById('btn').addEventListener('click', convert);
+  </script>
+</body>
+</html>

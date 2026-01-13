@@ -3,6 +3,18 @@ import { QrCodePix } from 'qrcode-pix';
 import { parseBoleto } from './utils/boleto';
 import * as crypto from 'crypto';
 
+function normalizeCity(input: string): string {
+  return input
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .slice(0, 15); // limite recomendado
+}
+
+function trimMerchantName(input: string): string {
+  return input.trim().slice(0, 25);
+}
+
 @Injectable()
 export class PixService {
   async convert(input: {
@@ -10,26 +22,30 @@ export class PixService {
     codigoBarras?: string;
     amountOverride?: number;
     message?: string;
-  }) {
-    const pixKey = process.env.PIX_KEY;
-    const merchant = process.env.PIX_MERCHANT_NAME || 'RECEBEDOR';
-    const city = (process.env.PIX_MERCHANT_CITY || 'SAO PAULO')
-      .toUpperCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
-    const defaultMessage = process.env.PIX_DEFAULT_MESSAGE || 'Pagamento';
 
-    if (!pixKey) {
-      throw new BadRequestException('PIX_KEY não configurado. Defina no .env');
+    // Dinâmicos
+    pixKey: string;
+    merchantName: string;
+    merchantCity: string;
+    payerName?: string;
+  }) {
+    const pixKey = input.pixKey;
+    const merchant = trimMerchantName(input.merchantName);
+    const city = normalizeCity(input.merchantCity);
+
+    if (!pixKey || !merchant || !city) {
+      throw new BadRequestException(
+        'pixKey, merchantName e merchantCity são obrigatórios',
+      );
     }
 
-    // 1) Extrai valor/vencimento a partir do boleto
+    // 1) Extrai valor/vencimento do boleto
     const parsed = parseBoleto({
       linhaDigitavel: input.linhaDigitavel,
       codigoBarras: input.codigoBarras,
     });
 
-    // 2) Se o valor do boleto for 0, permite sobrescrever
+    // 2) Se valor do boleto for 0, permite sobrescrever
     const amount =
       input.amountOverride && input.amountOverride > 0
         ? Number(input.amountOverride.toFixed(2))
@@ -41,7 +57,7 @@ export class PixService {
       );
     }
 
-    // 3) Gera TXID (até 35 chars). Usamos um hash curto e legível.
+    // 3) Gera TXID (até 35 chars)
     const base = `${input.linhaDigitavel || input.codigoBarras}-${Date.now()}`;
     const txid = crypto
       .createHash('sha256')
@@ -50,10 +66,15 @@ export class PixService {
       .slice(0, 25)
       .toUpperCase();
 
-    // 4) Mensagem opcional
-    const message = (input.message || defaultMessage).slice(0, 50);
+    // 4) Mensagem: combine mensagem + pagador (se fornecido)
 
-    // 5) Gera Pix copia e cola + QR base64
+    // Depois (corrigido):
+    const parts: string[] = [];
+    if (input.message) parts.push(input.message);
+    if (input.payerName) parts.push(`Pagador: ${input.payerName}`);
+    const message = parts.join(' · ').slice(0, 50);
+
+    // 5) Gera Pix estático
     const qr = QrCodePix({
       version: '01',
       key: pixKey,
@@ -65,16 +86,17 @@ export class PixService {
     });
 
     const payload = qr.payload();
-    const imageBase64 = await qr.base64(); // data:image/png;base64,...
+    const imageBase64 = await qr.base64();
 
     return {
       kind: parsed.kind,
       amount,
-      expirationDate: parsed.expirationDate ?? null,
+      expirationDate: parsed.expirationDate ?? null, // vem do boleto
       txid,
       message,
+      merchant: { name: merchant, city, pixKey },
       payload, // Pix "copia e cola"
-      imageBase64, // QR em base64 (data URL)
+      imageBase64, // QR base64
     };
   }
 }

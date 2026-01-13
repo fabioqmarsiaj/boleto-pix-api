@@ -5,6 +5,7 @@ import {
   ValidateIf,
   IsNumber,
   Min,
+  Length,
 } from 'class-validator';
 
 export class ConvertBoletoDto {
@@ -26,6 +27,26 @@ export class ConvertBoletoDto {
   @IsNumber()
   @Min(0.01, { message: 'amountOverride deve ser maior que 0' })
   amountOverride?: number;
+
+  // >>> Dinâmicos por requisição <<<
+  @IsString()
+  @Length(3, 77, { message: 'pixKey deve ter entre 3 e 77 caracteres' })
+  pixKey!: string;
+
+  @IsString()
+  @Length(1, 25, { message: 'merchantName deve ter entre 1 e 25 caracteres' })
+  merchantName!: string;
+
+  @IsString()
+  @Length(1, 15, {
+    message: 'merchantCity deve ter entre 1 e 15 caracteres (use sem acentos)',
+  })
+  merchantCity!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 50)
+  payerName?: string;
 
   @IsOptional()
   @IsString()
