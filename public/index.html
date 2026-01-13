@@ -230,7 +230,7 @@
       if (payerName)     payload.payerName = payerName;
 
       try {
-        const res = await fetch('http://localhost:3000/pix/convert', {
+        const res = await fetch('/pix/convert', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
